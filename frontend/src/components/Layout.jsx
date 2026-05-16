@@ -1,33 +1,42 @@
-import { LogOut, Target } from 'lucide-react';
+import { BarChart3, Command, GitBranch, LogOut, Sparkles, Target } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext.jsx';
 
-export default function Layout({ user, roleLabel, children }) {
-  const logout = () => {
-    localStorage.clear();
-    window.location.href = '/login';
-  };
+const roleMeta = {
+  employee: { icon: Sparkles, label: 'Momentum' },
+  manager: { icon: Command, label: 'Command' },
+  admin: { icon: GitBranch, label: 'Alignment' }
+};
+
+export default function Layout({ roleLabel, children }) {
+  const { user, logout } = useAuth();
+  const MetaIcon = roleMeta[user?.role]?.icon || BarChart3;
 
   return (
     <div className="app-shell">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
+      <header className="sticky top-0 z-20 border-b border-white/10 bg-slate-950/82 shadow-2xl shadow-black/20 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-forge text-white">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-forge text-white shadow-lg shadow-indigo-500/30">
               <Target size={22} />
             </span>
             <div>
-              <p className="text-lg font-bold leading-tight text-ink">GoalForge</p>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{roleLabel}</p>
+              <p className="text-lg font-extrabold leading-tight text-white">GoalForge</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-200">{roleLabel}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <div className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-200 md:flex">
+              <MetaIcon size={16} className="text-indigo-300" />
+              {roleMeta[user.role]?.label || 'Workspace'}
+            </div>
             <div className="hidden text-right sm:block">
-              <p className="text-sm font-semibold text-slate-800">{user.name || user.email}</p>
-              <p className="text-xs text-slate-500">{user.email}</p>
+              <p className="text-sm font-semibold text-white">{user.name || user.email}</p>
+              <p className="text-xs font-medium text-slate-400">{user.email}</p>
             </div>
             <button
               type="button"
               onClick={logout}
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+              className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:border-red-400/50 hover:bg-red-500/10 hover:text-red-200"
               title="Logout"
             >
               <LogOut size={18} />

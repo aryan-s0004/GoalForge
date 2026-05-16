@@ -11,6 +11,7 @@ api.interceptors.request.use((config) => {
 });
 
 export const login = (email) => api.post('/auth/login', { email });
+export const getHealth = () => api.get('/health');
 export const getGoals = () => api.get('/goals');
 export const createGoal = (data) => api.post('/goals', data);
 export const updateGoal = (id, data) => api.put(`/goals/${id}`, data);

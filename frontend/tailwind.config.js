@@ -3,10 +3,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        ink: '#172033',
-        forge: '#315EFB',
-        mint: '#11A683',
-        amber: '#E39D26'
+        ink: '#E5E7EB',
+        forge: '#6366F1',
+        mint: '#10B981',
+        amber: '#F59E0B',
+        night: '#020617'
       }
     }
   },
