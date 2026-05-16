@@ -1,0 +1,21 @@
+{
+  "name": "goalforge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "GoalForge - Goal Setting and Tracking Portal",
+  "scripts": {
+    "dev": "npm run build && concurrently -k \"npm --workspace backend run dev\" \"npm --workspace frontend run preview -- --port 5173\"",
+    "dev:backend": "npm --workspace backend run dev",
+    "dev:frontend": "npm run build && npm --workspace frontend run preview -- --port 5173",
+    "build": "npm --workspace frontend run build",
+    "start": "npm --workspace backend start"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
