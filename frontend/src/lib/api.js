@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   timeout: 15000,
 });
 
@@ -43,12 +43,25 @@ export const approveGoal = (id) => api.put(`/approvals/${id}/approve`);
 export const rejectGoal = (id, feedback) => api.put(`/approvals/${id}/reject`, { feedback });
 export const editGoalBeforeApprove = (id, data) => api.put(`/approvals/${id}/edit`, data);
 
-// Admin
+// Check-ins
+export const getCheckinsForGoal = (goalId) => api.get(`/checkins/goal/${goalId}`);
+export const createCheckin = (goalId, achievement) => api.post(`/checkins/goal/${goalId}`, { achievement });
+export const addCheckinComment = (checkinId, comment) => api.put(`/checkins/${checkinId}/comment`, { comment });
+
+// Notifications
+export const getNotifications = () => api.get('/notifications');
+export const markNotificationsAsRead = () => api.post('/notifications/read');
+
+// Admin & Escalations
 export const createSharedGoal = (data) => api.post('/admin/shared-goal', data);
 export const getSharedGoals = () => api.get('/admin/shared-goals');
 export const getAdminGoals = () => api.get('/admin/goals');
 export const unlockGoal = (id) => api.put(`/admin/goals/${id}/unlock`);
 export const getAuditLogs = () => api.get('/admin/audit-logs');
 export const getUsers = () => api.get('/admin/users');
+export const getEscalations = () => api.get('/admin/escalations');
+export const resolveEscalation = (id) => api.put(`/admin/escalations/${id}/resolve`);
+export const triggerMockEscalation = () => api.post('/admin/escalations/trigger');
+export const resetDemoData = () => api.post('/admin/reset-demo');
 
 export default api;

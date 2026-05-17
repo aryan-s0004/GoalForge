@@ -31,6 +31,7 @@ export const createSharedGoal = async (req, res, next) => {
           employeeId: emp.id,
           title: title.trim(),
           description: (description || '').trim(),
+          thrustArea: 'General',
           uomType: 'numeric',
           target: parsedTarget,
           weightage: 10,
@@ -98,6 +99,90 @@ export const getUsers = async (req, res, next) => {
 export const getSharedGoals = async (req, res, next) => {
   try {
     res.json(await db.listSharedGoals());
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getEscalations = async (req, res, next) => {
+  try {
+    res.json(await db.listEscalations());
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const resolveEscalation = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await db.resolveEscalation(id);
+    await db.createAuditLog({
+      action: 'ESCALATION_RESOLVED',
+      performedBy: req.user.id,
+      entityType: 'escalation',
+      entityId: id,
+      notes: `Admin resolved escalation id: ${id}`,
+    });
+    res.json({ success: true, message: 'Escalation marked as resolved' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const triggerMockEscalations = async (req, res, next) => {
+  try {
+    const goals = await db.listAllGoals();
+    const eligibleGoal = goals.find((g) => g.status === 'DRAFT' || g.status === 'REJECTED');
+    if (!eligibleGoal) {
+      return next(new AppError('No eligible goals found to trigger an escalation', 400));
+    }
+    
+    const employee = await db.findUserById(eligibleGoal.employeeId);
+    const managerId = employee?.managerId || 'mgr-1';
+
+    const esc = await db.createEscalation({
+      goalId: eligibleGoal.id,
+      employeeId: eligibleGoal.employeeId,
+      managerId,
+      type: eligibleGoal.status === 'REJECTED' ? 'REJECTION_STALEMATE' : 'SUBMISSION_OVERDUE',
+    });
+
+    await db.createAuditLog({
+      action: 'ESCALATION_TRIGGERED',
+      performedBy: req.user.id,
+      entityType: 'escalation',
+      entityId: esc.id,
+      notes: `System auto-triggered escalation for "${eligibleGoal.title}"`,
+    });
+
+    await db.createNotification({
+      userId: eligibleGoal.employeeId,
+      title: 'CRITICAL ESCALATION',
+      message: `Your goal "${eligibleGoal.title}" has been escalated to HR for exceeding submission window.`,
+    });
+    
+    await db.createNotification({
+      userId: managerId,
+      title: 'CRITICAL ESCALATION',
+      message: `Employee ${employee?.name || 'Arjun'} goal setup has been escalated to you and HR.`,
+    });
+
+    res.json({ success: true, escalation: esc });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const resetDemoData = async (req, res, next) => {
+  try {
+    await db.resetDemoData();
+    await db.createAuditLog({
+      action: 'DEMO_DATA_RESET',
+      performedBy: req.user.id,
+      entityType: 'system',
+      notes: 'Admin triggered deterministic demo database reset',
+    });
+    res.json({ success: true, message: 'Database reset to deterministic seeded state successfully' });
   } catch (error) {
     next(error);
   }

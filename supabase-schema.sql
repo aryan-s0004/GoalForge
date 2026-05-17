@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS "goals" (
   "employee_id" UUID NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "title" TEXT NOT NULL,
   "description" TEXT NOT NULL DEFAULT '',
+  "thrust_area" TEXT NOT NULL DEFAULT 'General',
   "uom_type" TEXT NOT NULL DEFAULT 'numeric',
   "target" DOUBLE PRECISION NOT NULL DEFAULT 0,
   "weightage" DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -82,6 +83,27 @@ CREATE TABLE IF NOT EXISTS "audit_logs" (
   "old_data" JSONB,
   "new_data" JSONB,
   "notes" TEXT,
+  "created_at" TIMESTAMP NOT NULL DEFAULT now()
+);
+
+-- 8. Create Notifications Table
+CREATE TABLE IF NOT EXISTS "notifications" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "user_id" UUID NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "title" TEXT NOT NULL,
+  "message" TEXT NOT NULL,
+  "read" BOOLEAN NOT NULL DEFAULT false,
+  "created_at" TIMESTAMP NOT NULL DEFAULT now()
+);
+
+-- 9. Create Escalations Table
+CREATE TABLE IF NOT EXISTS "escalations" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "goal_id" UUID REFERENCES "goals"("id") ON DELETE CASCADE,
+  "employee_id" UUID NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "manager_id" UUID NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "type" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'ACTIVE',
   "created_at" TIMESTAMP NOT NULL DEFAULT now()
 );
 

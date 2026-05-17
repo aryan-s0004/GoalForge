@@ -11,57 +11,62 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  name         String
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  role         Role     @default(EMPLOYEE)
-  department   String   @default("General")
-  managerId    String?  @map("manager_id")
-  createdAt    DateTime @default(now()) @map("created_at")
+  id                 String         @id @default(uuid())
+  name               String
+  email              String         @unique
+  passwordHash       String         @map("password_hash")
+  role               Role           @default(EMPLOYEE)
+  department         String         @default("General")
+  managerId          String?        @map("manager_id")
+  createdAt          DateTime       @default(now()) @map("created_at")
 
-  manager      User?       @relation("UserManager", fields: [managerId], references: [id])
-  reports      User[]      @relation("UserManager")
-  goals        Goal[]
-  sharedGoals  SharedGoal[]
-  auditActions AuditLog[]
-  checkins     Checkin[]
+  manager            User?          @relation("UserManager", fields: [managerId], references: [id])
+  reports            User[]         @relation("UserManager")
+  goals              Goal[]
+  sharedGoals        SharedGoal[]
+  auditActions       AuditLog[]
+  checkins           Checkin[]
+  notifications      Notification[]
+  employeeEscalations Escalation[]  @relation("EscalationEmployee")
+  managerEscalations Escalation[]   @relation("EscalationManager")
 
   @@map("users")
 }
 
 model Goal {
-  id             String     @id @default(uuid())
-  employeeId     String     @map("employee_id")
-  title          String
-  description    String     @default("")
-  uomType        String     @map("uom_type") @default("numeric")
-  target         Float      @default(0)
-  weightage      Float      @default(0)
-  status         GoalStatus @default(DRAFT)
-  locked         Boolean    @default(false)
-  quarter        String     @default("Q2-2026")
-  managerFeedback String?   @map("manager_feedback")
-  createdAt      DateTime   @default(now()) @map("created_at")
-  updatedAt      DateTime   @updatedAt @map("updated_at")
+  id              String     @id @default(uuid())
+  employeeId      String     @map("employee_id")
+  title           String
+  description     String     @default("")
+  thrustArea      String     @default("General") @map("thrust_area")
+  uomType         String     @map("uom_type") @default("numeric")
+  target          Float      @default(0)
+  weightage       Float      @default(0)
+  status          GoalStatus @default(DRAFT)
+  locked          Boolean    @default(false)
+  quarter         String     @default("Q2-2026")
+  managerFeedback String?    @map("manager_feedback")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
 
-  employee    User       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee    User         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   checkins    Checkin[]
   auditLogs   AuditLog[]
+  escalations Escalation[]
 
   @@map("goals")
 }
 
 model Checkin {
-  id             String       @id @default(uuid())
-  goalId         String       @map("goal_id")
-  userId         String       @map("user_id")
+  id             String        @id @default(uuid())
+  goalId         String        @map("goal_id")
+  userId         String        @map("user_id")
   quarter        String
-  achievement    Float        @default(0)
-  progress       Float        @default(0)
-  managerComment String?      @map("manager_comment")
+  achievement    Float         @default(0)
+  progress       Float         @default(0)
+  managerComment String?       @map("manager_comment")
   status         CheckinStatus @default(NOT_STARTED)
-  createdAt      DateTime     @default(now()) @map("created_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
 
   goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id])
@@ -70,14 +75,14 @@ model Checkin {
 }
 
 model SharedGoal {
-  id         String   @id @default(uuid())
-  ownerId    String   @map("owner_id")
-  title      String
-  description String  @default("")
-  target     Float    @default(0)
-  department String   @default("General")
-  assignedTo String[] @map("assigned_to")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id          String   @id @default(uuid())
+  ownerId     String   @map("owner_id")
+  title       String
+  description String   @default("")
+  target      Float    @default(0)
+  department  String   @default("General")
+  assignedTo  String[] @map("assigned_to")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   owner User @relation(fields: [ownerId], references: [id])
 
@@ -99,6 +104,35 @@ model AuditLog {
   goal      Goal? @relation(fields: [entityId], references: [id])
 
   @@map("audit_logs")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model Escalation {
+  id         String   @id @default(uuid())
+  goalId     String?  @map("goal_id")
+  employeeId String   @map("employee_id")
+  managerId  String   @map("manager_id")
+  type       String
+  status     String   @default("ACTIVE")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  goal     Goal? @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  employee User  @relation("EscalationEmployee", fields: [employeeId], references: [id])
+  manager  User  @relation("EscalationManager", fields: [managerId], references: [id])
+
+  @@map("escalations")
 }
 
 enum Role {
