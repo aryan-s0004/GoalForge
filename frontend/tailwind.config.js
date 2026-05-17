@@ -3,13 +3,28 @@ export default {
   theme: {
     extend: {
       colors: {
-        ink: '#E5E7EB',
-        forge: '#6366F1',
-        mint: '#10B981',
-        amber: '#F59E0B',
-        night: '#020617'
-      }
-    }
+        background: 'var(--background)',
+        foreground: 'var(--foreground)',
+        muted: {
+          DEFAULT: 'var(--muted)',
+          foreground: 'var(--muted-foreground)',
+        },
+        card: 'var(--card)',
+        border: 'var(--border)',
+        primary: {
+          DEFAULT: 'var(--primary)',
+          light: 'var(--primary-light)',
+          foreground: 'var(--primary-foreground)',
+        },
+        accent: 'var(--accent)',
+        success: 'var(--success)',
+        warning: 'var(--warning)',
+        destructive: 'var(--destructive)',
+      },
+      fontFamily: {
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif'],
+      },
+    },
   },
-  plugins: []
+  plugins: [],
 };

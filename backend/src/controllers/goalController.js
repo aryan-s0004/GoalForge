@@ -12,20 +12,31 @@ export const getGoals = async (req, res, next) => {
 
 export const createGoal = async (req, res, next) => {
   try {
-    if (req.user.role !== 'employee') return next(new AppError('Only employees can create personal goals', 403));
+    if (req.user.role.toUpperCase() !== 'EMPLOYEE') {
+      return next(new AppError('Only employees can create personal goals', 403));
+    }
     const payload = req.validatedBody;
 
     const goals = await db.listGoalsForUser(req.user.id);
     if (goals.length >= 8) return next(new AppError('Maximum 8 goals allowed', 400));
-    if (goals.some((goal) => goal.status !== 'draft')) return next(new AppError('Cannot add goals after submission', 400));
+    if (goals.some((g) => g.status !== 'DRAFT')) {
+      return next(new AppError('Cannot add goals after submission', 400));
+    }
 
-    const total = goals.reduce((sum, goal) => sum + Number(goal.weightage || 0), 0);
-    if (total + payload.weightage > 100) return next(new AppError(`Total weightage cannot exceed 100% (current: ${total}%)`, 400));
+    const total = goals.reduce((sum, g) => sum + Number(g.weightage || 0), 0);
+    if (total + payload.weightage > 100) {
+      return next(new AppError(`Total weightage cannot exceed 100% (current: ${total}%)`, 400));
+    }
 
     const goal = await db.createGoal({
-      user_id: req.user.id,
-      ...payload,
-      status: 'draft'
+      employeeId: req.user.id,
+      title: payload.title,
+      description: payload.description || '',
+      uomType: payload.uom || payload.uomType || 'numeric',
+      target: Number(payload.target_value ?? payload.target),
+      weightage: Number(payload.weightage),
+      status: 'DRAFT',
+      quarter: 'Q2-2026',
     });
     res.status(201).json(goal);
   } catch (error) {
@@ -36,23 +47,31 @@ export const createGoal = async (req, res, next) => {
 export const updateGoal = async (req, res, next) => {
   try {
     const goal = await db.findGoal(req.params.id);
-    if (!goal || goal.user_id !== req.user.id) return next(new AppError('Goal not found', 404));
+    if (!goal || goal.employeeId !== req.user.id) return next(new AppError('Goal not found', 404));
     if (goal.locked) return next(new AppError('Goal locked', 400));
-    if (goal.status !== 'draft') return next(new AppError('Cannot edit submitted goal', 400));
+    if (goal.status !== 'DRAFT') return next(new AppError('Cannot edit submitted goal', 400));
 
     const patch = req.validatedBody;
     if (!Object.keys(patch).length) return next(new AppError('Nothing to update', 400));
-    
+
+    // Normalize field names
+    const normalizedPatch = {};
+    if (patch.title !== undefined) normalizedPatch.title = patch.title;
+    if (patch.description !== undefined) normalizedPatch.description = patch.description;
+    if (patch.uom !== undefined || patch.uomType !== undefined) normalizedPatch.uomType = patch.uom || patch.uomType;
+    if (patch.target_value !== undefined || patch.target !== undefined) normalizedPatch.target = Number(patch.target_value ?? patch.target);
     if (patch.weightage !== undefined) {
+      normalizedPatch.weightage = Number(patch.weightage);
       const goals = await db.listGoalsForUser(req.user.id);
-      const totalOtherWeightage = goals
-        .filter((item) => item.id !== req.params.id)
-        .reduce((sum, item) => sum + Number(item.weightage || 0), 0);
-      if (totalOtherWeightage + patch.weightage > 100) {
-        return next(new AppError(`Total weightage cannot exceed 100% (current without this goal: ${totalOtherWeightage}%)`, 400));
+      const totalOther = goals
+        .filter((g) => g.id !== req.params.id)
+        .reduce((sum, g) => sum + Number(g.weightage || 0), 0);
+      if (totalOther + normalizedPatch.weightage > 100) {
+        return next(new AppError(`Total weightage cannot exceed 100% (current without this goal: ${totalOther}%)`, 400));
       }
     }
-    res.json(await db.updateGoal(req.params.id, patch));
+
+    res.json(await db.updateGoal(req.params.id, normalizedPatch));
   } catch (error) {
     next(error);
   }
@@ -60,15 +79,23 @@ export const updateGoal = async (req, res, next) => {
 
 export const submitGoals = async (req, res, next) => {
   try {
-    const goals = (await db.listGoalsForUser(req.user.id)).filter((goal) => goal.status === 'draft');
+    const goals = (await db.listGoalsForUser(req.user.id)).filter((g) => g.status === 'DRAFT');
     if (!goals.length) return next(new AppError('No draft goals to submit', 400));
     if (goals.length > 8) return next(new AppError('Maximum 8 goals allowed', 400));
 
-    const total = goals.reduce((sum, goal) => sum + Number(goal.weightage || 0), 0);
+    const total = goals.reduce((sum, g) => sum + Number(g.weightage || 0), 0);
     if (total !== 100) return next(new AppError(`Total weightage must be 100% (current: ${total}%)`, 400));
-    if (goals.some((goal) => Number(goal.weightage) < 10)) return next(new AppError('Each goal needs at least 10% weightage', 400));
+    if (goals.some((g) => Number(g.weightage) < 10)) {
+      return next(new AppError('Each goal needs at least 10% weightage', 400));
+    }
 
-    await db.updateDraftGoalsForUser(req.user.id, { status: 'submitted' });
+    await db.updateDraftGoalsForUser(req.user.id, { status: 'SUBMITTED' });
+    await db.createAuditLog({
+      action: 'GOALS_SUBMITTED',
+      performedBy: req.user.id,
+      entityType: 'goal',
+      notes: `${goals.length} goals submitted for approval`,
+    });
     res.json({ message: 'Goals submitted for approval' });
   } catch (error) {
     next(error);
@@ -77,10 +104,13 @@ export const submitGoals = async (req, res, next) => {
 
 export const getPendingApprovals = async (req, res, next) => {
   try {
-    if (!['manager', 'admin'].includes(req.user.role)) return next(new AppError('Manager access required', 403));
-    if (req.user.role === 'admin') {
-      const goals = (await db.listAllGoals()).filter((goal) => goal.status === 'submitted');
-      return res.json(goals);
+    const role = req.user.role.toUpperCase();
+    if (!['MANAGER', 'ADMIN'].includes(role)) {
+      return next(new AppError('Manager access required', 403));
+    }
+    if (role === 'ADMIN') {
+      const allGoals = await db.listAllGoals();
+      return res.json(allGoals.filter((g) => g.status === 'SUBMITTED'));
     }
     res.json(await db.listPendingForManager(req.user.id));
   } catch (error) {
@@ -90,14 +120,28 @@ export const getPendingApprovals = async (req, res, next) => {
 
 export const approveGoal = async (req, res, next) => {
   try {
-    if (!['manager', 'admin'].includes(req.user.role)) return next(new AppError('Not authorized', 403));
-    const existingGoal = await db.findGoal(req.params.goalId);
-    if (!existingGoal) return next(new AppError('Goal not found', 404));
-    if (!(await canReviewGoal(req.user, existingGoal))) return next(new AppError('You can only review goals for your team', 403));
-    if (existingGoal.status !== 'submitted') return next(new AppError('Only submitted goals can be approved', 400));
+    const role = req.user.role.toUpperCase();
+    if (!['MANAGER', 'ADMIN'].includes(role)) return next(new AppError('Not authorized', 403));
 
-    const goal = await db.updateGoal(req.params.goalId, { status: 'approved', locked: true, manager_feedback: '' });
-    await db.createAuditLog({ goal_id: req.params.goalId, action: 'APPROVE', changed_by: req.user.id, notes: 'Manager approved goal' });
+    const existing = await db.findGoal(req.params.goalId);
+    if (!existing) return next(new AppError('Goal not found', 404));
+    if (!(await canReviewGoal(req.user, existing))) {
+      return next(new AppError('You can only review goals for your team', 403));
+    }
+    if (existing.status !== 'SUBMITTED') return next(new AppError('Only submitted goals can be approved', 400));
+
+    const goal = await db.updateGoal(req.params.goalId, {
+      status: 'APPROVED',
+      locked: true,
+      managerFeedback: '',
+    });
+    await db.createAuditLog({
+      action: 'GOAL_APPROVED',
+      performedBy: req.user.id,
+      entityType: 'goal',
+      entityId: req.params.goalId,
+      notes: 'Goal approved and locked',
+    });
     res.json(goal);
   } catch (error) {
     next(error);
@@ -106,16 +150,31 @@ export const approveGoal = async (req, res, next) => {
 
 export const rejectGoal = async (req, res, next) => {
   try {
-    if (!['manager', 'admin'].includes(req.user.role)) return next(new AppError('Not authorized', 403));
-    const existingGoal = await db.findGoal(req.params.goalId);
-    if (!existingGoal) return next(new AppError('Goal not found', 404));
-    if (!(await canReviewGoal(req.user, existingGoal))) return next(new AppError('You can only review goals for your team', 403));
-    if (existingGoal.status !== 'submitted') return next(new AppError('Only submitted goals can be rejected', 400));
+    const role = req.user.role.toUpperCase();
+    if (!['MANAGER', 'ADMIN'].includes(role)) return next(new AppError('Not authorized', 403));
+
+    const existing = await db.findGoal(req.params.goalId);
+    if (!existing) return next(new AppError('Goal not found', 404));
+    if (!(await canReviewGoal(req.user, existing))) {
+      return next(new AppError('You can only review goals for your team', 403));
+    }
+    if (existing.status !== 'SUBMITTED') return next(new AppError('Only submitted goals can be rejected', 400));
 
     const { feedback } = req.body || {};
     if (!feedback) return next(new AppError('Feedback is required', 400));
-    const goal = await db.updateGoal(req.params.goalId, { status: 'rejected', locked: false, manager_feedback: feedback });
-    await db.createAuditLog({ goal_id: req.params.goalId, action: 'REJECT', changed_by: req.user.id, notes: feedback });
+
+    const goal = await db.updateGoal(req.params.goalId, {
+      status: 'REJECTED',
+      locked: false,
+      managerFeedback: feedback,
+    });
+    await db.createAuditLog({
+      action: 'GOAL_REJECTED',
+      performedBy: req.user.id,
+      entityType: 'goal',
+      entityId: req.params.goalId,
+      notes: feedback,
+    });
     res.json(goal);
   } catch (error) {
     next(error);
@@ -124,30 +183,41 @@ export const rejectGoal = async (req, res, next) => {
 
 export const editPendingGoal = async (req, res, next) => {
   try {
-    if (!['manager', 'admin'].includes(req.user.role)) return next(new AppError('Not authorized', 403));
-    const existingGoal = await db.findGoal(req.params.goalId);
-    if (!existingGoal) return next(new AppError('Goal not found', 404));
-    if (!(await canReviewGoal(req.user, existingGoal))) return next(new AppError('You can only review goals for your team', 403));
-    if (existingGoal.status !== 'submitted') return next(new AppError('Only submitted goals can be edited by a reviewer', 400));
+    const role = req.user.role.toUpperCase();
+    if (!['MANAGER', 'ADMIN'].includes(role)) return next(new AppError('Not authorized', 403));
 
-    const { target_value, weightage } = req.body || {};
+    const existing = await db.findGoal(req.params.goalId);
+    if (!existing) return next(new AppError('Goal not found', 404));
+    if (!(await canReviewGoal(req.user, existing))) {
+      return next(new AppError('You can only review goals for your team', 403));
+    }
+    if (existing.status !== 'SUBMITTED') return next(new AppError('Only submitted goals can be edited', 400));
+
+    const { target_value, target, weightage } = req.body || {};
     const patch = {};
-    if (target_value !== undefined) {
-      const parsedTarget = Number(target_value);
-      if (!Number.isFinite(parsedTarget)) return next(new AppError('Target must be a valid number', 400));
-      patch.target_value = parsedTarget;
+    const rawTarget = target_value ?? target;
+    if (rawTarget !== undefined) {
+      const parsed = Number(rawTarget);
+      if (!Number.isFinite(parsed)) return next(new AppError('Target must be a valid number', 400));
+      patch.target = parsed;
     }
     if (weightage !== undefined) {
-      const parsedWeightage = Number(weightage);
-      if (!Number.isFinite(parsedWeightage) || parsedWeightage < 10 || parsedWeightage > 100) {
+      const parsed = Number(weightage);
+      if (!Number.isFinite(parsed) || parsed < 10 || parsed > 100) {
         return next(new AppError('Weightage must be between 10 and 100', 400));
       }
-      patch.weightage = parsedWeightage;
+      patch.weightage = parsed;
     }
     if (!Object.keys(patch).length) return next(new AppError('Nothing to update', 400));
 
     const goal = await db.updateGoal(req.params.goalId, patch);
-    await db.createAuditLog({ goal_id: req.params.goalId, action: 'MANAGER_EDIT', changed_by: req.user.id, notes: 'Manager adjusted target or weightage' });
+    await db.createAuditLog({
+      action: 'MANAGER_EDIT',
+      performedBy: req.user.id,
+      entityType: 'goal',
+      entityId: req.params.goalId,
+      notes: 'Manager adjusted target or weightage',
+    });
     res.json(goal);
   } catch (error) {
     next(error);

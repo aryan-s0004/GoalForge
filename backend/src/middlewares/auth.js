@@ -10,7 +10,7 @@ export const auth = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await db.findProfileById(decoded.userId);
+    const user = await db.findUserById(decoded.userId);
     if (!user) return next(new AppError('Invalid token', 401));
     req.user = user;
     next();
@@ -19,17 +19,19 @@ export const auth = async (req, res, next) => {
   }
 };
 
-export const requireRole = (role) => (req, res, next) => {
-  if (req.user.role !== role) {
-    return next(new AppError(`Unauthorized: requires ${role} role`, 403));
+export const requireRole = (...roles) => (req, res, next) => {
+  const userRole = req.user.role.toUpperCase();
+  const allowed = roles.map((r) => r.toUpperCase());
+  if (!allowed.includes(userRole)) {
+    return next(new AppError(`Unauthorized: requires ${roles.join(' or ')} role`, 403));
   }
   next();
 };
 
 export const canReviewGoal = async (user, goal) => {
   if (!goal) return false;
-  if (user.role === 'admin') return true;
-  if (user.role !== 'manager') return false;
-  const owner = await db.findProfileById(goal.user_id);
-  return owner?.manager_id === user.id;
+  if (user.role.toUpperCase() === 'ADMIN') return true;
+  if (user.role.toUpperCase() !== 'MANAGER') return false;
+  const owner = await db.findUserById(goal.employeeId);
+  return owner?.managerId === user.id;
 };

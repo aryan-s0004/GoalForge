@@ -1,102 +1,99 @@
--- GOALFORGE - Complete Database Schema
--- Run this in Supabase SQL Editor.
+-- GOALFORGE - Complete Database Schema (Supabase & Local PostgreSQL)
+-- Matches schema.prisma exactly to ensure full runtime compatibility.
 
-create extension if not exists "pgcrypto";
+-- 1. Setup Extensions
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-create table if not exists profiles (
-  id uuid primary key default gen_random_uuid(),
-  email text unique not null,
-  full_name text,
-  role text check (role in ('employee', 'manager', 'admin')) default 'employee',
-  manager_id uuid references profiles(id),
-  created_at timestamp default now()
+-- 2. Create Custom Types
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'Role') THEN
+        CREATE TYPE "Role" AS ENUM ('EMPLOYEE', 'MANAGER', 'ADMIN');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'GoalStatus') THEN
+        CREATE TYPE "GoalStatus" AS ENUM ('DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'CheckinStatus') THEN
+        CREATE TYPE "CheckinStatus" AS ENUM ('NOT_STARTED', 'ON_TRACK', 'AT_RISK', 'COMPLETED');
+    END IF;
+END $$;
+
+-- 3. Create Users Table
+CREATE TABLE IF NOT EXISTS "users" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "name" TEXT NOT NULL,
+  "email" TEXT UNIQUE NOT NULL,
+  "password_hash" TEXT NOT NULL,
+  "role" "Role" NOT NULL DEFAULT 'EMPLOYEE',
+  "department" TEXT NOT NULL DEFAULT 'General',
+  "manager_id" UUID REFERENCES "users"("id") ON DELETE SET NULL,
+  "created_at" TIMESTAMP NOT NULL DEFAULT now()
 );
 
-create table if not exists goals (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid references profiles(id) on delete cascade,
-  title text not null,
-  description text,
-  thrust_area text not null,
-  uom text check (uom in ('numeric', 'percent', 'timeline', 'zero')) not null,
-  target_value decimal not null,
-  weightage decimal check (weightage >= 0 and weightage <= 100),
-  status text check (status in ('draft', 'submitted', 'approved', 'rejected')) default 'draft',
-  locked boolean default false,
-  manager_feedback text,
-  created_at timestamp default now(),
-  updated_at timestamp default now()
+-- 4. Create Goals Table
+CREATE TABLE IF NOT EXISTS "goals" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "employee_id" UUID NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "title" TEXT NOT NULL,
+  "description" TEXT NOT NULL DEFAULT '',
+  "uom_type" TEXT NOT NULL DEFAULT 'numeric',
+  "target" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "weightage" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "status" "GoalStatus" NOT NULL DEFAULT 'DRAFT',
+  "locked" BOOLEAN NOT NULL DEFAULT false,
+  "quarter" TEXT NOT NULL DEFAULT 'Q2-2026',
+  "manager_feedback" TEXT,
+  "created_at" TIMESTAMP NOT NULL DEFAULT now(),
+  "updated_at" TIMESTAMP NOT NULL DEFAULT now()
 );
 
-create table if not exists shared_goals (
-  id uuid primary key default gen_random_uuid(),
-  created_by uuid references profiles(id),
-  title text not null,
-  description text,
-  thrust_area text not null,
-  uom text not null,
-  target_value decimal not null,
-  assigned_to_emails text[] default '{}',
-  created_at timestamp default now()
+-- 5. Create Checkins Table
+CREATE TABLE IF NOT EXISTS "checkins" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "goal_id" UUID NOT NULL REFERENCES "goals"("id") ON DELETE CASCADE,
+  "user_id" UUID NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "quarter" TEXT NOT NULL,
+  "achievement" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "progress" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "manager_comment" TEXT,
+  "status" "CheckinStatus" NOT NULL DEFAULT 'NOT_STARTED',
+  "created_at" TIMESTAMP NOT NULL DEFAULT now()
 );
 
-create table if not exists goal_shares (
-  id uuid primary key default gen_random_uuid(),
-  shared_goal_id uuid references shared_goals(id),
-  employee_id uuid references profiles(id),
-  weightage decimal default 0,
-  created_at timestamp default now()
+-- 6. Create Shared Goals Table
+CREATE TABLE IF NOT EXISTS "shared_goals" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "owner_id" UUID NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "title" TEXT NOT NULL,
+  "description" TEXT NOT NULL DEFAULT '',
+  "target" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "department" TEXT NOT NULL DEFAULT 'General',
+  "assigned_to" TEXT[] DEFAULT '{}',
+  "created_at" TIMESTAMP NOT NULL DEFAULT now()
 );
 
-create table if not exists audit_logs (
-  id uuid primary key default gen_random_uuid(),
-  goal_id uuid references goals(id),
-  action text,
-  changed_by uuid references profiles(id),
-  old_data jsonb,
-  new_data jsonb,
-  notes text,
-  created_at timestamp default now()
+-- 7. Create Audit Logs Table
+CREATE TABLE IF NOT EXISTS "audit_logs" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "action" TEXT NOT NULL,
+  "performed_by" UUID NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "entity_type" TEXT NOT NULL DEFAULT 'goal',
+  "entity_id" UUID REFERENCES "goals"("id") ON DELETE SET NULL,
+  "old_data" JSONB,
+  "new_data" JSONB,
+  "notes" TEXT,
+  "created_at" TIMESTAMP NOT NULL DEFAULT now()
 );
 
-create table if not exists checkins (
-  id uuid primary key default gen_random_uuid(),
-  goal_id uuid references goals(id),
-  quarter text check (quarter in ('Q1', 'Q2', 'Q3', 'Q4')),
-  actual_achievement decimal,
-  status text check (status in ('Not Started', 'On Track', 'Completed')),
-  manager_comment text,
-  updated_at timestamp default now()
-);
-
-insert into profiles (email, full_name, role) values
-  ('john.employee@atomberg.com', 'John Worker', 'employee'),
-  ('jane.employee@atomberg.com', 'Jane Smith', 'employee'),
-  ('mike.manager@atomberg.com', 'Mike Manager', 'manager'),
-  ('admin@atomberg.com', 'Admin User', 'admin')
-on conflict (email) do nothing;
-
-update profiles
-set manager_id = (select id from profiles where email = 'mike.manager@atomberg.com')
-where role = 'employee' and manager_id is null;
-
-alter table profiles enable row level security;
-alter table goals enable row level security;
-alter table shared_goals enable row level security;
-alter table goal_shares enable row level security;
-alter table audit_logs enable row level security;
-alter table checkins enable row level security;
-
-drop policy if exists "Profiles are readable" on profiles;
-drop policy if exists "Goals are readable" on goals;
-drop policy if exists "Goals are insertable" on goals;
-drop policy if exists "Goals are updatable" on goals;
-drop policy if exists "Shared goals are readable" on shared_goals;
-drop policy if exists "Audit logs are readable" on audit_logs;
-
-create policy "Profiles are readable" on profiles for select using (true);
-create policy "Goals are readable" on goals for select using (true);
-create policy "Goals are insertable" on goals for insert with check (true);
-create policy "Goals are updatable" on goals for update using (true);
-create policy "Shared goals are readable" on shared_goals for select using (true);
-create policy "Audit logs are readable" on audit_logs for select using (true);
+-- 8. Seed Default Realistic Enterprise Users
+-- Default password: "password123" (hashed via bcryptjs)
+INSERT INTO "users" ("id", "name", "email", "password_hash", "role", "department", "manager_id") VALUES
+  ('admin-1111-1111-1111-111111111111', 'Rajesh Kumar', 'admin@goalforge.com', '$2a$10$wKzPZ6KUp.Jj2eG1q.G1uO6XGq0qF1H8G7.G5BqZ.hJ3o3VqG1u5W', 'ADMIN', 'HR', NULL),
+  ('mgr-1111-1111-1111-111111111111', 'Kavita Nair', 'manager@goalforge.com', '$2a$10$wKzPZ6KUp.Jj2eG1q.G1uO6XGq0qF1H8G7.G5BqZ.hJ3o3VqG1u5W', 'MANAGER', 'Engineering', NULL),
+  ('mgr-2222-2222-2222-222222222222', 'Deepak Joshi', 'deepak.joshi@goalforge.com', '$2a$10$wKzPZ6KUp.Jj2eG1q.G1uO6XGq0qF1H8G7.G5BqZ.hJ3o3VqG1u5W', 'MANAGER', 'Sales', NULL),
+  ('emp-1111-1111-1111-111111111111', 'Arjun Mehta', 'employee@goalforge.com', '$2a$10$wKzPZ6KUp.Jj2eG1q.G1uO6XGq0qF1H8G7.G5BqZ.hJ3o3VqG1u5W', 'EMPLOYEE', 'Engineering', 'mgr-1111-1111-1111-111111111111'),
+  ('emp-2222-2222-2222-222222222222', 'Priya Sharma', 'priya.sharma@goalforge.com', '$2a$10$wKzPZ6KUp.Jj2eG1q.G1uO6XGq0qF1H8G7.G5BqZ.hJ3o3VqG1u5W', 'EMPLOYEE', 'Engineering', 'mgr-1111-1111-1111-111111111111'),
+  ('emp-3333-3333-3333-333333333333', 'Rohit Kapoor', 'rohit.kapoor@goalforge.com', '$2a$10$wKzPZ6KUp.Jj2eG1q.G1uO6XGq0qF1H8G7.G5BqZ.hJ3o3VqG1u5W', 'EMPLOYEE', 'Sales', 'mgr-2222-2222-2222-222222222222'),
+  ('emp-4444-4444-4444-444444444444', 'Sneha Patel', 'sneha.patel@goalforge.com', '$2a$10$wKzPZ6KUp.Jj2eG1q.G1uO6XGq0qF1H8G7.G5BqZ.hJ3o3VqG1u5W', 'EMPLOYEE', 'Product', 'mgr-1111-1111-1111-111111111111'),
+  ('emp-5555-5555-5555-555555555555', 'Vikram Singh', 'vikram.singh@goalforge.com', '$2a$10$wKzPZ6KUp.Jj2eG1q.G1uO6XGq0qF1H8G7.G5BqZ.hJ3o3VqG1u5W', 'EMPLOYEE', 'Sales', 'mgr-2222-2222-2222-222222222222')
+ON CONFLICT (email) DO NOTHING;

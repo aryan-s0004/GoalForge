@@ -2,13 +2,17 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files and prisma schema first for proper client compilation
 COPY package*.json ./
+COPY prisma ./prisma/
 
-# Install dependencies (only production)
+# Install dependencies
 RUN npm ci --only=production
 
-# Copy source code
+# Explicitly compile and build the Prisma client for the alpine target
+RUN npx prisma generate
+
+# Copy the rest of the backend source code
 COPY . .
 
 EXPOSE 5000

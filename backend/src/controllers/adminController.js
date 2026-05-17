@@ -1,49 +1,53 @@
 import { db } from '../utils/db.js';
 import { AppError } from '../utils/AppError.js';
 
-const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
-const cleanText = (value) => String(value || '').trim();
-const toFiniteNumber = (value) => {
-  if (value === '' || value === null || value === undefined) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
 export const createSharedGoal = async (req, res, next) => {
   try {
-    const { title, description, thrust_area, uom, target_value, assigned_to_emails } = req.body;
+    const { title, description, target, department, assigned_to_emails } = req.body;
     if (!title || !Array.isArray(assigned_to_emails) || !assigned_to_emails.length) {
       return next(new AppError('Title and assigned employee emails are required', 400));
     }
-    const target = toFiniteNumber(target_value);
-    if (target === null) return next(new AppError('Target must be a valid number', 400));
+    const parsedTarget = Number(target);
+    if (!Number.isFinite(parsedTarget)) return next(new AppError('Target must be a valid number', 400));
 
-    const uniqueEmails = [...new Set(assigned_to_emails.map(normalizeEmail).filter(Boolean))];
+    const uniqueEmails = [...new Set(assigned_to_emails.map((e) => e.trim().toLowerCase()).filter(Boolean))];
     if (!uniqueEmails.length) return next(new AppError('At least one valid employee email is required', 400));
 
+    const employees = await db.listUsersByEmails(uniqueEmails);
+
     const sharedGoal = await db.createSharedGoal({
-      created_by: req.user.id,
-      title: cleanText(title),
-      description: cleanText(description),
-      thrust_area: cleanText(thrust_area),
-      uom: cleanText(uom),
-      target_value: target,
-      assigned_to_emails: uniqueEmails
+      ownerId: req.user.id,
+      title: title.trim(),
+      description: (description || '').trim(),
+      target: parsedTarget,
+      department: (department || 'General').trim(),
+      assignedTo: employees.map((e) => e.id),
     });
 
-    const employees = await db.listProfilesByEmails(uniqueEmails);
-    await Promise.all(employees.map((employee) => db.createGoal({
-      user_id: employee.id,
-      title: cleanText(title),
-      description: cleanText(description),
-      thrust_area: cleanText(thrust_area),
-      uom: cleanText(uom),
-      target_value: target,
-      weightage: 10,
-      status: 'draft'
-    })));
+    // Create individual goals for each assigned employee
+    await Promise.all(
+      employees.map((emp) =>
+        db.createGoal({
+          employeeId: emp.id,
+          title: title.trim(),
+          description: (description || '').trim(),
+          uomType: 'numeric',
+          target: parsedTarget,
+          weightage: 10,
+          status: 'DRAFT',
+          quarter: 'Q2-2026',
+        })
+      )
+    );
 
-    await db.createAuditLog({ goal_id: null, action: 'SHARED_GOAL', changed_by: req.user.id, notes: `Assigned ${title}` });
+    await db.createAuditLog({
+      action: 'SHARED_GOAL_CREATED',
+      performedBy: req.user.id,
+      entityType: 'shared_goal',
+      entityId: sharedGoal.id,
+      notes: `Assigned "${title}" to ${employees.length} employees`,
+    });
+
     res.status(201).json({ ...sharedGoal, assigned_count: employees.length });
   } catch (error) {
     next(error);
@@ -60,9 +64,15 @@ export const getAllGoals = async (req, res, next) => {
 
 export const unlockGoal = async (req, res, next) => {
   try {
-    const goal = await db.updateGoal(req.params.id, { locked: false, status: 'draft' });
+    const goal = await db.updateGoal(req.params.id, { locked: false, status: 'DRAFT' });
     if (!goal) return next(new AppError('Goal not found', 404));
-    await db.createAuditLog({ goal_id: req.params.id, action: 'UNLOCK', changed_by: req.user.id, notes: 'Admin unlocked goal' });
+    await db.createAuditLog({
+      action: 'GOAL_UNLOCKED',
+      performedBy: req.user.id,
+      entityType: 'goal',
+      entityId: req.params.id,
+      notes: 'Admin unlocked goal',
+    });
     res.json(goal);
   } catch (error) {
     next(error);
@@ -80,6 +90,14 @@ export const getAuditLogs = async (req, res, next) => {
 export const getUsers = async (req, res, next) => {
   try {
     res.json(await db.listUsers());
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getSharedGoals = async (req, res, next) => {
+  try {
+    res.json(await db.listSharedGoals());
   } catch (error) {
     next(error);
   }

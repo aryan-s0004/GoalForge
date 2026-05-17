@@ -1,50 +1,61 @@
-import { BarChart3, Command, GitBranch, LogOut, Sparkles, Target } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext.jsx';
+import { useNavigate, Link } from 'react-router-dom';
 
-const roleMeta = {
-  employee: { icon: Sparkles, label: 'Momentum' },
-  manager: { icon: Command, label: 'Command' },
-  admin: { icon: GitBranch, label: 'Alignment' }
-};
+export default function Layout({ children }) {
+  const navigate = useNavigate();
+  const raw = localStorage.getItem('user');
+  const user = raw ? JSON.parse(raw) : null;
 
-export default function Layout({ roleLabel, children }) {
-  const { user, logout } = useAuth();
-  const MetaIcon = roleMeta[user?.role]?.icon || BarChart3;
+  const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/');
+  };
+
+  const roleLabel = user?.role?.charAt(0).toUpperCase() + user?.role?.slice(1);
+  const roleColor = user?.role === 'admin' ? 'bg-destructive/10 text-destructive' : user?.role === 'manager' ? 'bg-success/10 text-success' : 'bg-primary/10 text-primary';
 
   return (
-    <div className="app-shell">
-      <header className="sticky top-0 z-20 border-b border-white/10 bg-slate-950/82 shadow-2xl shadow-black/20 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+    <div className="min-h-screen bg-muted/30">
+      {/* Sticky Top Bar */}
+      <header className="sticky top-0 z-50 bg-white border-b border-border backdrop-blur-lg">
+        <div className="max-w-7xl mx-auto flex items-center justify-between px-6 h-14">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-forge text-white shadow-lg shadow-indigo-500/30">
-              <Target size={22} />
-            </span>
-            <div>
-              <p className="text-lg font-extrabold leading-tight text-white">GoalForge</p>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-200">{roleLabel}</p>
-            </div>
+            <Link to="/" className="flex items-center gap-2 font-bold text-base">
+              <div className="h-7 w-7 rounded-md gradient-brand-bg flex items-center justify-center">
+                <span className="text-white text-xs font-extrabold">G</span>
+              </div>
+              GoalForge
+            </Link>
+            {user && (
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-md ${roleColor}`}>
+                {roleLabel}
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-200 md:flex">
-              <MetaIcon size={16} className="text-indigo-300" />
-              {roleMeta[user.role]?.label || 'Workspace'}
+          {user && (
+            <div className="flex items-center gap-4">
+              <div className="text-right hidden sm:block">
+                <div className="text-sm font-medium leading-tight">{user.name}</div>
+                <div className="text-xs text-muted-foreground">{user.email}</div>
+              </div>
+              <div className="h-8 w-8 rounded-full gradient-brand-bg flex items-center justify-center text-white text-xs font-bold">
+                {user.name?.charAt(0) || 'U'}
+              </div>
+              <button
+                onClick={logout}
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Sign Out
+              </button>
             </div>
-            <div className="hidden text-right sm:block">
-              <p className="text-sm font-semibold text-white">{user.name || user.email}</p>
-              <p className="text-xs font-medium text-slate-400">{user.email}</p>
-            </div>
-            <button
-              type="button"
-              onClick={logout}
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:border-red-400/50 hover:bg-red-500/10 hover:text-red-200"
-              title="Logout"
-            >
-              <LogOut size={18} />
-            </button>
-          </div>
+          )}
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-4 py-8">{children}</main>
+
+      {/* Content */}
+      <main className="max-w-7xl mx-auto px-6 py-6">
+        {children}
+      </main>
     </div>
   );
 }

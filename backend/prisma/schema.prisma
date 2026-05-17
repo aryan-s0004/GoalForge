@@ -1,0 +1,122 @@
+// GoalForge — Prisma Schema
+// Supports both Supabase PostgreSQL and local Docker PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role     @default(EMPLOYEE)
+  department   String   @default("General")
+  managerId    String?  @map("manager_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  manager      User?       @relation("UserManager", fields: [managerId], references: [id])
+  reports      User[]      @relation("UserManager")
+  goals        Goal[]
+  sharedGoals  SharedGoal[]
+  auditActions AuditLog[]
+  checkins     Checkin[]
+
+  @@map("users")
+}
+
+model Goal {
+  id             String     @id @default(uuid())
+  employeeId     String     @map("employee_id")
+  title          String
+  description    String     @default("")
+  uomType        String     @map("uom_type") @default("numeric")
+  target         Float      @default(0)
+  weightage      Float      @default(0)
+  status         GoalStatus @default(DRAFT)
+  locked         Boolean    @default(false)
+  quarter        String     @default("Q2-2026")
+  managerFeedback String?   @map("manager_feedback")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  employee    User       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  checkins    Checkin[]
+  auditLogs   AuditLog[]
+
+  @@map("goals")
+}
+
+model Checkin {
+  id             String       @id @default(uuid())
+  goalId         String       @map("goal_id")
+  userId         String       @map("user_id")
+  quarter        String
+  achievement    Float        @default(0)
+  progress       Float        @default(0)
+  managerComment String?      @map("manager_comment")
+  status         CheckinStatus @default(NOT_STARTED)
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("checkins")
+}
+
+model SharedGoal {
+  id         String   @id @default(uuid())
+  ownerId    String   @map("owner_id")
+  title      String
+  description String  @default("")
+  target     Float    @default(0)
+  department String   @default("General")
+  assignedTo String[] @map("assigned_to")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  owner User @relation(fields: [ownerId], references: [id])
+
+  @@map("shared_goals")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String
+  performedBy String   @map("performed_by")
+  entityType  String   @map("entity_type") @default("goal")
+  entityId    String?  @map("entity_id")
+  oldData     Json?    @map("old_data")
+  newData     Json?    @map("new_data")
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  performer User  @relation(fields: [performedBy], references: [id])
+  goal      Goal? @relation(fields: [entityId], references: [id])
+
+  @@map("audit_logs")
+}
+
+enum Role {
+  EMPLOYEE
+  MANAGER
+  ADMIN
+}
+
+enum GoalStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum CheckinStatus {
+  NOT_STARTED
+  ON_TRACK
+  AT_RISK
+  COMPLETED
+}

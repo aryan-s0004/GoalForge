@@ -1,0 +1,21 @@
+# GoalForge Demo Accounts
+# All accounts use password: password123
+
+## Employee
+employee@goalforge.com
+password123
+
+## Manager
+manager@goalforge.com
+password123
+
+## Admin
+admin@goalforge.com
+password123
+
+# Additional Demo Users (auto-seeded)
+# priya.sharma@goalforge.com   (Employee - Engineering)
+# rohit.kapoor@goalforge.com   (Employee - Sales)
+# sneha.patel@goalforge.com    (Employee - Product)
+# vikram.singh@goalforge.com   (Employee - Sales)
+# deepak.joshi@goalforge.com   (Manager - Sales)

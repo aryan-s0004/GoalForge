@@ -2,70 +2,129 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Design Tokens ──────────────────────────────────────────────── */
 :root {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #e5e7eb;
-  background: #020617;
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --card: #ffffff;
+  --border: #e2e8f0;
+  --primary: #6366f1;
+  --primary-light: #818cf8;
+  --primary-foreground: #ffffff;
+  --accent: #f0f0ff;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --destructive: #ef4444;
+  --ring: rgba(99, 102, 241, 0.25);
+
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: var(--foreground);
+  background: var(--background);
 }
 
 body {
   margin: 0;
   min-width: 320px;
-  background: #020617;
+  background: var(--background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-button,
-input,
-select,
-textarea {
+/* ─── Utility Classes ────────────────────────────────────────────── */
+button, input, select, textarea {
   font: inherit;
 }
 
-.app-shell {
-  min-height: 100vh;
+/* Brand gradient */
+.gradient-brand-bg {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Shadow system */
+.shadow-glow {
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.15), 0 0 6px rgba(99, 102, 241, 0.1);
+}
+
+.shadow-elevated {
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 6px 16px rgba(0, 0, 0, 0.06),
+    0 24px 60px rgba(0, 0, 0, 0.06);
+}
+
+/* Card surfaces */
+.surface-card {
+  border-radius: 1rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+/* Decorative backgrounds */
+.hero-bg {
   background:
-    linear-gradient(135deg, rgba(99, 102, 241, 0.24), transparent 28rem),
-    linear-gradient(215deg, rgba(16, 185, 129, 0.12), transparent 24rem),
-    #020617;
+    radial-gradient(ellipse 70% 50% at 30% 10%, rgba(99, 102, 241, 0.08), transparent),
+    radial-gradient(ellipse 50% 60% at 80% 60%, rgba(139, 92, 246, 0.06), transparent);
 }
 
-.panel {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(15, 23, 42, 0.62);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
-  backdrop-filter: blur(22px);
+.mesh-bg {
+  background:
+    linear-gradient(135deg, rgba(99, 102, 241, 0.06), rgba(139, 92, 246, 0.04), rgba(236, 72, 153, 0.03)),
+    linear-gradient(to right, rgba(99, 102, 241, 0.02), transparent);
 }
 
+/* Sidebar for dashboard preview */
+.sidebar-gradient {
+  background: linear-gradient(180deg, #1e1b4b, #312e81);
+}
+
+/* ─── Form Fields ────────────────────────────────────────────────── */
 .field {
   width: 100%;
-  border-radius: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(2, 6, 23, 0.62);
-  color: #f8fafc;
-  padding: 0.65rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  padding: 0.6rem 0.75rem;
   outline: none;
+  font-size: 0.875rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .field::placeholder {
-  color: #94a3b8;
+  color: var(--muted-foreground);
 }
 
 .field:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.24);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+/* ─── Dashboard Panels ───────────────────────────────────────────── */
+.panel {
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03);
+  border-radius: 0.75rem;
 }
 
 .premium-card {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.82), rgba(15, 23, 42, 0.52));
-  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border-radius: 0.75rem;
 }
 
-.glow-line {
-  background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.9), transparent);
-}
-
+/* ─── Animations ─────────────────────────────────────────────────── */
 @keyframes rise-in {
   from {
     opacity: 0;
@@ -79,4 +138,32 @@ textarea {
 
 .animate-rise {
   animation: rise-in 520ms ease both;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade {
+  animation: fade-in 400ms ease both;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
